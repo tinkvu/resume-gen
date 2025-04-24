@@ -5,6 +5,7 @@ import os
 from fpdf import FPDF
 import textwrap
 from dotenv import load_dotenv
+import re
 
 # Load environment variables
 load_dotenv()
@@ -36,6 +37,7 @@ def get_customized_resume(job_role, job_description, original_cv):
        - Education
     
     Return only the customized resume content in a clean format, ready to be converted to PDF.
+    Format the output in a consistent way that can be parsed by section headers.
     """
     
     try:
@@ -49,33 +51,167 @@ def get_customized_resume(job_role, job_description, original_cv):
     except Exception as e:
         return f"Error generating customized resume: {str(e)}"
 
-def create_pdf(content, output_path):
-    """Create a PDF file from the content"""
-    pdf = FPDF()
+def create_professional_pdf(content, output_path):
+    """Create a professionally formatted PDF resume"""
+    # Create PDF instance
+    class PDF(FPDF):
+        def header(self):
+            # No header
+            pass
+        
+        def footer(self):
+            # Footer with page number
+            self.set_y(-15)
+            self.set_font('Arial', 'I', 8)
+            self.cell(0, 10, f'Page {self.page_no()}', 0, 0, 'C')
+    
+    pdf = PDF()
+    pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
     
-    # Set font for title
-    pdf.set_font("Arial", "B", 16)
-    pdf.cell(0, 10, "Customized Resume", ln=True, align="C")
-    pdf.ln(10)
+    # Extract name from content (assuming it's the first line)
+    lines = content.split('\n')
+    name = lines[0].strip('*')
     
-    # Set font for content
-    pdf.set_font("Arial", "", 12)
+    # Name at the top
+    pdf.set_font('Arial', 'B', 16)
+    pdf.cell(0, 10, name, 0, 1, 'C')
+    pdf.ln(2)
     
-    # Split content into lines and add to PDF
-    for line in content.split('\n'):
-        # Check if line is a heading (assuming headings are in all caps or end with a colon)
-        if line.isupper() or line.endswith(':') or not line.strip():
-            pdf.ln(5)  # Add some space before headings
-            if line.strip():  # Only print if line is not empty
-                pdf.set_font("Arial", "B", 12)
-                pdf.cell(0, 10, line, ln=True)
-                pdf.set_font("Arial", "", 12)
-        else:
-            # Wrap text to fit in PDF
-            wrapped_lines = textwrap.wrap(line, width=90)
+    # Parse sections from content
+    sections = {}
+    current_section = None
+    current_content = []
+    
+    # Regular expression to match section headers
+    section_pattern = re.compile(r'\*\*(.*?):\*\*')
+    
+    for line in lines[1:]:  # Skip the name line
+        # Check if this is a section header
+        match = section_pattern.match(line)
+        if match:
+            # If we already have a section, save it
+            if current_section:
+                sections[current_section] = current_content
+            
+            # Start a new section
+            current_section = match.group(1)
+            current_content = []
+        elif current_section:
+            current_content.append(line.strip())
+    
+    # Add the last section
+    if current_section and current_content:
+        sections[current_section] = current_content
+    
+    # Process each section
+    for section, content in sections.items():
+        # Section header
+        pdf.set_font('Arial', 'B', 12)
+        pdf.set_fill_color(240, 240, 240)  # Light gray background
+        pdf.cell(0, 8, section, 1, 1, 'L', True)
+        pdf.ln(1)
+        
+        # Section content
+        pdf.set_font('Arial', '', 10)
+        
+        # Special formatting for different sections
+        if section == "Contact Information":
+            # Format contact info in a single line or multiple lines
+            contact_text = ' | '.join([c for c in content if c])
+            
+            # Wrap long contact information
+            wrapped_lines = textwrap.wrap(contact_text, width=100)
             for wrapped_line in wrapped_lines:
-                pdf.cell(0, 10, wrapped_line, ln=True)
+                pdf.cell(0, 6, wrapped_line, 0, 1)
+        
+        elif section == "Skills":
+            # Format skills as bullet points
+            for skill_line in content:
+                if skill_line.startswith('*'):
+                    skill_text = skill_line[1:].strip()
+                    pdf.cell(5, 6, chr(149), 0, 0)  # Bullet point
+                    pdf.cell(0, 6, skill_text, 0, 1)
+                elif skill_line:
+                    pdf.cell(0, 6, skill_line, 0, 1)
+        
+        elif section == "Work Experience" or section == "Education":
+            # Format work experience with better indentation
+            current_role = None
+            
+            for line in content:
+                if line.startswith('*'):
+                    # This is a job title or degree
+                    current_role = line.strip('* ')
+                    parts = current_role.split(',', 1)
+                    
+                    if len(parts) >= 2:
+                        role, company_info = parts
+                        pdf.set_font('Arial', 'B', 10)
+                        pdf.cell(0, 6, role, 0, 1)
+                        pdf.set_font('Arial', 'I', 10)
+                        pdf.cell(0, 6, company_info, 0, 1)
+                    else:
+                        pdf.set_font('Arial', 'B', 10)
+                        pdf.cell(0, 6, current_role, 0, 1)
+                    
+                    pdf.set_font('Arial', '', 10)
+                
+                elif line.startswith('+'):
+                    # This is a bullet point under a role
+                    bullet_text = line[1:].strip()
+                    pdf.cell(10, 6, '', 0, 0)  # Indentation
+                    pdf.cell(3, 6, chr(149), 0, 0)  # Bullet point
+                    
+                    # Wrap text for bullet points with proper indentation
+                    wrapped_lines = textwrap.wrap(bullet_text, width=85)
+                    if wrapped_lines:
+                        pdf.cell(0, 6, wrapped_lines[0], 0, 1)
+                        for wrapped_line in wrapped_lines[1:]:
+                            pdf.cell(13, 6, '', 0, 0)  # Indentation
+                            pdf.cell(0, 6, wrapped_line, 0, 1)
+                
+                elif line:
+                    pdf.cell(0, 6, line, 0, 1)
+        
+        elif section == "Personal Projects":
+            # Format projects similar to work experience
+            current_project = None
+            
+            for line in content:
+                if line.startswith('*'):
+                    # This is a project title
+                    current_project = line.strip('* ')
+                    pdf.set_font('Arial', 'B', 10)
+                    pdf.cell(0, 6, current_project, 0, 1)
+                    pdf.set_font('Arial', '', 10)
+                
+                elif line.startswith('+'):
+                    # This is a bullet point under a project
+                    bullet_text = line[1:].strip()
+                    pdf.cell(10, 6, '', 0, 0)  # Indentation
+                    pdf.cell(3, 6, chr(149), 0, 0)  # Bullet point
+                    
+                    # Wrap text for bullet points
+                    wrapped_lines = textwrap.wrap(bullet_text, width=85)
+                    if wrapped_lines:
+                        pdf.cell(0, 6, wrapped_lines[0], 0, 1)
+                        for wrapped_line in wrapped_lines[1:]:
+                            pdf.cell(13, 6, '', 0, 0)  # Indentation
+                            pdf.cell(0, 6, wrapped_line, 0, 1)
+                
+                elif line:
+                    pdf.cell(0, 6, line, 0, 1)
+        
+        else:
+            # Default formatting for other sections
+            for line in content:
+                if line:
+                    wrapped_lines = textwrap.wrap(line, width=100)
+                    for wrapped_line in wrapped_lines:
+                        pdf.cell(0, 6, wrapped_line, 0, 1)
+        
+        pdf.ln(5)  # Add space between sections
     
     # Save the PDF
     pdf.output(output_path)
@@ -86,10 +222,10 @@ def main():
     st.title("AI Resume Customizer")
     st.write("Tailor your resume to match specific job descriptions using AI")
     
-    # API key input
-    api_key = st.text_input("Enter your Groq API Key:", type="password")
-    if api_key:
-        os.environ["GROQ_API_KEY"] = api_key
+    # # API key input
+    # api_key = st.text_input("Enter your Groq API Key:", type="password")
+    # if api_key:
+    #     os.environ["GROQ_API_KEY"] = api_key
     
     # Create two columns for inputs
     col1, col2 = st.columns(2)
@@ -126,10 +262,10 @@ def main():
                     tmp_path = tmp_file.name
                 
                 # Create PDF
-                create_pdf(customized_content, tmp_path)
+                create_professional_pdf(customized_content, tmp_path)
                 
                 # Display customized content
-                st.subheader("Customized Resume:")
+                st.subheader("Customized Resume Preview:")
                 st.text_area("Preview:", value=customized_content, height=400)
                 
                 # Provide download button for PDF
