@@ -6,7 +6,6 @@ import json
 from fpdf import FPDF
 import textwrap
 from dotenv import load_dotenv
-import math
 
 # Load environment variables
 load_dotenv()
@@ -273,7 +272,7 @@ def create_professional_pdf(resume_data, output_path):
     
     pdf.ln(5)
     
-    # Skills - arranged in 3 columns
+    # Skills
     pdf.set_font('Arial', 'B', 12)
     pdf.set_fill_color(240, 240, 240)
     pdf.cell(0, 8, "Skills", 1, 1, 'L', True)
@@ -282,40 +281,10 @@ def create_professional_pdf(resume_data, output_path):
     pdf.set_font('Arial', '', 10)
     skills = resume_data.get('skills', [])
     
-    # Calculate skills per column
-    column_width = 60  # Width of each column
-    bullet_indent = 5  # Indent for bullet points
-    
-    if len(skills) > 0:
-        skills_per_column = math.ceil(len(skills) / 3)
-        column_skills = [skills[i:i + skills_per_column] for i in range(0, len(skills), skills_per_column)]
-        
-        # Maximum skills to display in a column
-        max_skills_in_column = max([len(col) for col in column_skills])
-        
-        # Track current position
-        current_row = 0
-        
-        # Draw skills in columns
-        for i in range(max_skills_in_column):
-            for col_idx, column in enumerate(column_skills):
-                # Starting x position for this column
-                x_start = pdf.l_margin + (col_idx * column_width)
-                
-                if i < len(column):
-                    # Save current position
-                    pdf.set_xy(x_start, pdf.get_y())
-                    # Add bullet point
-                    pdf.cell(bullet_indent, 6, chr(149), 0, 0)
-                    # Add skill text
-                    pdf.set_x(x_start + bullet_indent)
-                    
-                    # Wrap skill text if it's too long for the column
-                    skill_text = column[i]
-                    pdf.cell(column_width - bullet_indent, 6, skill_text, 0, 0)
-            
-            # Move to the next row
-            pdf.ln(6)
+    # Format skills as either bullet points or in categories
+    for skill in skills:
+        pdf.cell(5, 6, chr(149), 0, 0)  # Bullet point
+        pdf.cell(0, 6, skill, 0, 1)
     
     pdf.ln(5)
     
@@ -504,7 +473,6 @@ def main():
     if 'resume_data' not in st.session_state:
         st.session_state.resume_data = None
         st.session_state.generated = False
-        st.session_state.raw_json = None
     
     # Process button
     if st.button("Generate Customized Resume") or st.session_state.generated:
@@ -526,7 +494,6 @@ def main():
                         st.stop()
                     else:
                         st.session_state.resume_data = result["data"]
-                        st.session_state.raw_json = json.dumps(result["data"], indent=2)
                         st.session_state.generated = True
             
             # Now handle the editing and display
@@ -534,7 +501,7 @@ def main():
             
             # Create editing interface with tabs
             st.subheader("Edit Your Resume:")
-            tabs = st.tabs(["Personal Info", "Summary", "Skills", "Work Experience", "Education", "Projects", "JSON"])
+            tabs = st.tabs(["Personal Info", "Summary", "Skills", "Work Experience", "Education", "Projects"])
             
             # Personal Info Tab
             with tabs[0]:
@@ -653,34 +620,10 @@ def main():
                 
                 resume_data["projects"] = new_projects
             
-            # JSON Tab
-            with tabs[6]:
-                # Update the JSON based on the current resume_data
-                updated_json = json.dumps(resume_data, indent=2)
-                edited_json = st.text_area("JSON Data:", value=updated_json, height=400)
-                
-                # Parse JSON when edited
-                if st.button("Update from JSON"):
-                    try:
-                        updated_data = json.loads(edited_json)
-                        resume_data.update(updated_data)
-                        st.success("Resume data updated from JSON!")
-                        st.experimental_rerun()
-                    except json.JSONDecodeError as e:
-                        st.error(f"Invalid JSON: {str(e)}")
-                
-                st.info("Edit the JSON directly if you need to make advanced changes to the resume structure.")
-            
             # Preview and download section
             st.subheader("Resume Preview")
-            preview_tabs = st.tabs(["Text Preview", "JSON Preview"])
-            
-            with preview_tabs[0]:
-                text_resume = create_text_resume(resume_data)
-                st.text_area("Text Preview:", value=text_resume, height=300)
-                
-            with preview_tabs[1]:
-                st.text_area("JSON Structure:", value=json.dumps(resume_data, indent=2), height=300)
+            text_resume = create_text_resume(resume_data)
+            st.text_area("Text Preview:", value=text_resume, height=300)
             
             # Create PDF button
             if st.button("Generate Final PDF"):
@@ -705,4 +648,10 @@ def main():
             
             # Add button to reset and start over
             if st.button("Start Over"):
-                st.session_
+                st.session_state.resume_data = None
+                st.session_state.generated = False
+                st.session_state.custom_prompt = ""
+                st.experimental_rerun()
+
+if __name__ == "__main__":
+    main()
