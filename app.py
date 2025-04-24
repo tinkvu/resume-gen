@@ -223,9 +223,9 @@ def main():
     st.write("Tailor your resume to match specific job descriptions using AI")
     
     # # API key input
-    # api_key = st.text_input("Enter your Groq API Key:", type="password")
-    # if api_key:
-    #     os.environ["GROQ_API_KEY"] = api_key
+    api_key = st.text_input("Enter your Groq API Key:", type="password")
+    if api_key:
+        os.environ["GROQ_API_KEY"] = api_key
     
     # Create two columns for inputs
     col1, col2 = st.columns(2)
