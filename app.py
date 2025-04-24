@@ -16,9 +16,9 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 # Initialize Groq client
 client = groq.Groq(api_key=GROQ_API_KEY)
 
-def get_customized_resume_json(job_role, job_description, original_cv):
-    """Get a customized resume in JSON format using the Llama model via Groq API"""
-    prompt = f"""
+def get_default_prompt(job_role, job_description, original_cv):
+    """Get the default prompt template with fields filled in"""
+    return f"""
     As an AI resume expert, your task is to customize the provided CV to better match the specified job role and description.
     
     Job Role: {job_role}
@@ -88,10 +88,12 @@ def get_customized_resume_json(job_role, job_description, original_cv):
     
     Return ONLY the JSON object without any other text, explanation, or formatting.
     """
-    
+
+def get_customized_resume_json(prompt, model="llama3-8b-8192"):
+    """Get a customized resume in JSON format using the specified model via Groq API"""
     try:
         response = client.chat.completions.create(
-            model="llama3-8b-8192",
+            model=model,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3,
             max_tokens=4000,
@@ -426,6 +428,47 @@ def main():
             placeholder="Paste your current resume/CV content here..."
         )
     
+    # Add model selection
+    model = st.selectbox(
+        "Language Model:",
+        ["llama3-8b-8192", "llama3-70b-8192", "mixtral-8x7b-32768"]
+    )
+    
+    # Add option to edit the prompt
+    edit_prompt = st.checkbox("Edit AI Prompt", value=False, help="Enable to edit the prompt sent to the AI model")
+    
+    # Initialize or retrieve custom_prompt from session state
+    if 'custom_prompt' not in st.session_state:
+        st.session_state.custom_prompt = ""
+    
+    # If edit_prompt is checked, show the prompt editor
+    custom_prompt = ""
+    if edit_prompt:
+        # Generate the default prompt with current input values
+        default_prompt = get_default_prompt(job_role, job_description, original_cv)
+        
+        # If custom_prompt is empty or inputs have changed, update it
+        if not st.session_state.custom_prompt or st.session_state.get('prev_inputs') != (job_role, job_description):
+            st.session_state.custom_prompt = default_prompt
+        
+        # Store current inputs for comparison on next render
+        st.session_state.prev_inputs = (job_role, job_description)
+        
+        # Show the prompt editor
+        custom_prompt = st.text_area(
+            "Edit AI Prompt:",
+            value=st.session_state.custom_prompt,
+            height=400
+        )
+        
+        # Update session state with edited prompt
+        st.session_state.custom_prompt = custom_prompt
+        
+        # Show reset button
+        if st.button("Reset to Default Prompt"):
+            st.session_state.custom_prompt = get_default_prompt(job_role, job_description, original_cv)
+            st.experimental_rerun()
+    
     # Create a session state to store the generated resume data
     if 'resume_data' not in st.session_state:
         st.session_state.resume_data = None
@@ -438,9 +481,12 @@ def main():
         else:
             # Only call the API if we haven't generated yet
             if not st.session_state.generated:
-                with st.spinner("Customizing your resume... This may take a minute"):
+                with st.spinner(f"Customizing your resume using {model}... This may take a minute"):
+                    # Determine which prompt to use
+                    prompt_to_use = custom_prompt if edit_prompt and custom_prompt else get_default_prompt(job_role, job_description, original_cv)
+                    
                     # Get customized resume content as JSON
-                    result = get_customized_resume_json(job_role, job_description, original_cv)
+                    result = get_customized_resume_json(prompt_to_use, model)
                     
                     if not result["success"]:
                         st.error(f"Error: {result.get('error', 'Unknown error')}")
@@ -599,6 +645,13 @@ def main():
                 
                 # Clean up the temporary file
                 os.unlink(tmp_path)
+            
+            # Add button to reset and start over
+            if st.button("Start Over"):
+                st.session_state.resume_data = None
+                st.session_state.generated = False
+                st.session_state.custom_prompt = ""
+                st.experimental_rerun()
 
 if __name__ == "__main__":
     main()
