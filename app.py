@@ -32,6 +32,7 @@ def get_default_prompt(job_role, job_description, original_cv):
     2. Uses appropriate keywords from the job description
     3. Reorganizes content to emphasize the most relevant qualifications
     4. Maintains the candidate's genuine experience and skills (no fabrication)
+    5. Change the descriptions of past experiences to fit with the job requirements
     
     Return the resume in the following JSON format:
     {{
