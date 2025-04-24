@@ -10,8 +10,11 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
+# Get API key from environment variables
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
 # Initialize Groq client
-client = groq.Groq(api_key=os.getenv("GROQ_API_KEY"))
+client = groq.Groq(api_key=GROQ_API_KEY)
 
 def get_customized_resume_json(job_role, job_description, original_cv):
     """Get a customized resume in JSON format using the Llama model via Groq API"""
@@ -399,10 +402,10 @@ def main():
     st.title("AI Resume Customizer")
     st.write("Tailor your resume to match specific job descriptions using AI")
     
-    # API key input
-    api_key = st.text_input("Enter your Groq API Key:", type="password")
-    if api_key:
-        os.environ["GROQ_API_KEY"] = api_key
+    # Check if API key is available
+    if not GROQ_API_KEY:
+        st.error("GROQ_API_KEY is not set in environment variables. Please set it and restart the application.")
+        st.stop()
     
     # Create two columns for inputs
     col1, col2 = st.columns(2)
@@ -423,55 +426,179 @@ def main():
             placeholder="Paste your current resume/CV content here..."
         )
     
+    # Create a session state to store the generated resume data
+    if 'resume_data' not in st.session_state:
+        st.session_state.resume_data = None
+        st.session_state.generated = False
+    
     # Process button
-    if st.button("Generate Customized Resume"):
-        if not api_key:
-            st.error("Please enter your Groq API key")
-        elif not job_role or not job_description or not original_cv:
+    if st.button("Generate Customized Resume") or st.session_state.generated:
+        if not job_role or not job_description or not original_cv:
             st.error("Please fill in all fields")
         else:
-            with st.spinner("Customizing your resume... This may take a minute"):
-                # Get customized resume content as JSON
-                result = get_customized_resume_json(job_role, job_description, original_cv)
+            # Only call the API if we haven't generated yet
+            if not st.session_state.generated:
+                with st.spinner("Customizing your resume... This may take a minute"):
+                    # Get customized resume content as JSON
+                    result = get_customized_resume_json(job_role, job_description, original_cv)
+                    
+                    if not result["success"]:
+                        st.error(f"Error: {result.get('error', 'Unknown error')}")
+                        st.text_area("Raw API response:", value=result.get('raw', ''), height=200)
+                        st.stop()
+                    else:
+                        st.session_state.resume_data = result["data"]
+                        st.session_state.generated = True
+            
+            # Now handle the editing and display
+            resume_data = st.session_state.resume_data
+            
+            # Create editing interface with tabs
+            st.subheader("Edit Your Resume:")
+            tabs = st.tabs(["Personal Info", "Summary", "Skills", "Work Experience", "Education", "Projects"])
+            
+            # Personal Info Tab
+            with tabs[0]:
+                col1, col2 = st.columns(2)
+                with col1:
+                    resume_data["name"] = st.text_input("Name:", value=resume_data.get("name", ""))
+                    resume_data["contact_info"]["location"] = st.text_input("Location:", value=resume_data.get("contact_info", {}).get("location", ""))
+                    resume_data["contact_info"]["phone"] = st.text_input("Phone:", value=resume_data.get("contact_info", {}).get("phone", ""))
+                    resume_data["contact_info"]["email"] = st.text_input("Email:", value=resume_data.get("contact_info", {}).get("email", ""))
                 
-                if not result["success"]:
-                    st.error(f"Error: {result.get('error', 'Unknown error')}")
-                    st.text_area("Raw API response:", value=result.get('raw', ''), height=200)
-                else:
-                    resume_data = result["data"]
+                with col2:
+                    resume_data["contact_info"]["linkedin"] = st.text_input("LinkedIn URL:", value=resume_data.get("contact_info", {}).get("linkedin", ""))
+                    resume_data["contact_info"]["github"] = st.text_input("GitHub URL:", value=resume_data.get("contact_info", {}).get("github", ""))
+                    resume_data["contact_info"]["portfolio"] = st.text_input("Portfolio URL:", value=resume_data.get("contact_info", {}).get("portfolio", ""))
+                    resume_data["contact_info"]["additional"] = st.text_input("Additional Contact Info:", value=resume_data.get("contact_info", {}).get("additional", ""))
+            
+            # Summary Tab
+            with tabs[1]:
+                resume_data["professional_summary"] = st.text_area("Professional Summary:", value=resume_data.get("professional_summary", ""), height=200)
+            
+            # Skills Tab
+            with tabs[2]:
+                skills = resume_data.get("skills", [])
+                skills_text = "\n".join(skills)
+                skills_text = st.text_area("Skills (One per line):", value=skills_text, height=200)
+                resume_data["skills"] = [s.strip() for s in skills_text.split("\n") if s.strip()]
+            
+            # Work Experience Tab
+            with tabs[3]:
+                work_experiences = resume_data.get("work_experience", [])
+                work_experiences_count = len(work_experiences)
+                
+                work_experiences_count = st.number_input("Number of work experiences:", min_value=0, value=work_experiences_count)
+                
+                new_work_experiences = []
+                for i in range(work_experiences_count):
+                    st.subheader(f"Work Experience #{i+1}")
                     
-                    # Convert JSON to text resume for preview
-                    text_resume = create_text_resume(resume_data)
+                    job = {} if i >= len(work_experiences) else work_experiences[i]
                     
-                    # Create temporary file for PDF
-                    with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
-                        tmp_path = tmp_file.name
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        job["title"] = st.text_input(f"Job Title #{i+1}:", value=job.get("title", ""))
+                        job["company"] = st.text_input(f"Company #{i+1}:", value=job.get("company", ""))
                     
-                    # Create PDF from JSON data
-                    create_professional_pdf(resume_data, tmp_path)
+                    with col2:
+                        job["location"] = st.text_input(f"Location #{i+1}:", value=job.get("location", ""))
+                        job["duration"] = st.text_input(f"Duration #{i+1}:", value=job.get("duration", ""))
                     
-                    # Display tabs for different views
-                    tab1, tab2 = st.tabs(["Resume Preview", "JSON Data"])
+                    achievements = job.get("achievements", [])
+                    achievements_text = "\n".join(achievements)
+                    achievements_text = st.text_area(f"Achievements #{i+1} (One per line):", value=achievements_text)
+                    job["achievements"] = [a.strip() for a in achievements_text.split("\n") if a.strip()]
                     
-                    with tab1:
-                        st.subheader("Customized Resume Preview:")
-                        st.text_area("Text Preview:", value=text_resume, height=400)
+                    new_work_experiences.append(job)
+                    st.markdown("---")
+                
+                resume_data["work_experience"] = new_work_experiences
+            
+            # Education Tab
+            with tabs[4]:
+                educations = resume_data.get("education", [])
+                educations_count = len(educations)
+                
+                educations_count = st.number_input("Number of education entries:", min_value=0, value=educations_count)
+                
+                new_educations = []
+                for i in range(educations_count):
+                    st.subheader(f"Education #{i+1}")
                     
-                    with tab2:
-                        st.subheader("JSON Data:")
-                        st.json(resume_data)
+                    edu = {} if i >= len(educations) else educations[i]
                     
-                    # Provide download button for PDF
-                    with open(tmp_path, "rb") as pdf_file:
-                        st.download_button(
-                            label="Download Resume as PDF",
-                            data=pdf_file,
-                            file_name=f"Customized_Resume_{job_role.replace(' ', '_')}.pdf",
-                            mime="application/pdf"
-                        )
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        edu["degree"] = st.text_input(f"Degree #{i+1}:", value=edu.get("degree", ""))
+                        edu["institution"] = st.text_input(f"Institution #{i+1}:", value=edu.get("institution", ""))
                     
-                    # Clean up the temporary file
-                    os.unlink(tmp_path)
+                    with col2:
+                        edu["location"] = st.text_input(f"Education Location #{i+1}:", value=edu.get("location", ""))
+                        edu["duration"] = st.text_input(f"Education Duration #{i+1}:", value=edu.get("duration", ""))
+                    
+                    details = edu.get("details", [])
+                    details_text = "\n".join(details)
+                    details_text = st.text_area(f"Details #{i+1} (One per line):", value=details_text)
+                    edu["details"] = [d.strip() for d in details_text.split("\n") if d.strip()]
+                    
+                    new_educations.append(edu)
+                    st.markdown("---")
+                
+                resume_data["education"] = new_educations
+            
+            # Projects Tab
+            with tabs[5]:
+                projects = resume_data.get("projects", [])
+                if not projects:
+                    projects = []
+                
+                projects_count = len(projects)
+                projects_count = st.number_input("Number of projects:", min_value=0, value=projects_count)
+                
+                new_projects = []
+                for i in range(projects_count):
+                    st.subheader(f"Project #{i+1}")
+                    
+                    project = {} if i >= len(projects) else projects[i]
+                    
+                    project["name"] = st.text_input(f"Project Name #{i+1}:", value=project.get("name", ""))
+                    
+                    details = project.get("details", [])
+                    details_text = "\n".join(details)
+                    details_text = st.text_area(f"Project Details #{i+1} (One per line):", value=details_text)
+                    project["details"] = [d.strip() for d in details_text.split("\n") if d.strip()]
+                    
+                    new_projects.append(project)
+                    st.markdown("---")
+                
+                resume_data["projects"] = new_projects
+            
+            # Preview and download section
+            st.subheader("Resume Preview")
+            text_resume = create_text_resume(resume_data)
+            st.text_area("Text Preview:", value=text_resume, height=300)
+            
+            # Create PDF button
+            if st.button("Generate Final PDF"):
+                # Create temporary file for PDF
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
+                    tmp_path = tmp_file.name
+                
+                # Create PDF from edited JSON data
+                create_professional_pdf(resume_data, tmp_path)
+                
+                # Provide download button for PDF
+                with open(tmp_path, "rb") as pdf_file:
+                    st.download_button(
+                        label="Download Resume as PDF",
+                        data=pdf_file,
+                        file_name=f"Customized_Resume_{job_role.replace(' ', '_')}.pdf",
+                        mime="application/pdf"
+                    )
+                
+                # Clean up the temporary file
+                os.unlink(tmp_path)
 
 if __name__ == "__main__":
     main()
