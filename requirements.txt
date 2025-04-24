@@ -1,1 +1,1 @@
-pip install streamlit groq fpdf python-dotenv
+streamlit groq fpdf python-dotenv
