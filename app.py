@@ -3,7 +3,7 @@ import groq
 import tempfile
 import os
 import json
-from fpdf import FPDF
+from fpdf2 import FPDF
 import textwrap
 from dotenv import load_dotenv
 
