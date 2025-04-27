@@ -5,6 +5,7 @@ import os
 import json
 from fpdf import FPDF  # Keep original import, but install fpdf version 2+
 import textwrap
+from dotenv import load_dotenv
 from io import StringIO
 from pdfminer.high_level import extract_text as extract_pdf_text
 import docx2txt
