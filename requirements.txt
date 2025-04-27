@@ -2,5 +2,5 @@ streamlit
 groq
 fpdf2
 python-dotenv
-pip install git+https://github.com/py-pdf/fpdf2.git@master
+git+https://github.com/py-pdf/fpdf2.git@master
 fpdf
