@@ -681,7 +681,7 @@ def main():
                     st.download_button(
                         label="Download Resume as PDF",
                         data=pdf_file,
-                        file_name=f"Customized_Resume_{job_role.replace(' ', '_')}.pdf",
+                        file_name=f"{job_role.replace(' ', '_')}.pdf",
                         mime="application/pdf"
                     )
                 
