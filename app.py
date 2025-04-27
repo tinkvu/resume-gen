@@ -9,11 +9,6 @@ from dotenv import load_dotenv
 from io import StringIO
 from pdfminer.high_level import extract_text as extract_pdf_text
 import docx2txt
-st.set_page_config(
-        page_title="Custom Resume by tinkvu",
-        page_icon=":checkered_flag:",
-        layout="wide",
-    )
 
 def extract_text_from_file(uploaded_file):
     file_type = uploaded_file.name.split('.')[-1].lower()
@@ -424,7 +419,7 @@ def create_professional_pdf(resume_data, output_path):
     pdf.output(output_path)
 
 def main():
-    st.set_page_config(page_title="AI Resume Customizer", layout="wide")
+    st.set_page_config(page_title="AI Custom Resume by tinkvu",page_icon=":checkered_flag:", layout="wide")
     
     st.title("AI Resume Customizer")
     st.write("Tailor your resume to match specific job descriptions using AI")
