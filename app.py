@@ -5,7 +5,25 @@ import os
 import json
 from fpdf import FPDF  # Keep original import, but install fpdf version 2+
 import textwrap
-from dotenv import load_dotenv
+from dotenv import load_dotenvfrom io import StringIO
+from pdfminer.high_level import extract_text as extract_pdf_text
+import docx2txt
+
+def extract_text_from_file(uploaded_file):
+    file_type = uploaded_file.name.split('.')[-1].lower()
+
+    if file_type == 'pdf':
+        text = extract_pdf_text(uploaded_file)
+    elif file_type in ['docx', 'doc']:
+        text = docx2txt.process(uploaded_file)
+    elif file_type == 'txt':
+        stringio = StringIO(uploaded_file.getvalue().decode("utf-8"))
+        text = stringio.read()
+    else:
+        st.error('Unsupported file type. Please upload a PDF, DOCX, or TXT file.')
+        return None
+    return text
+
 
 # Load environment variables
 load_dotenv()
@@ -422,12 +440,35 @@ def main():
         )
     
     with col2:
-        original_cv = st.text_area(
-            "Your Current Resume/CV:", 
-            height=300,
-            placeholder="Paste your current resume/CV content here..."
+        st.write("Upload or Paste Your Resume/CV")
+
+        option = st.radio(
+            "Choose how you want to provide your Resume/CV:",
+            ("Upload File", "Paste Text")
         )
     
+        col1, col2 = st.columns(2)
+
+        with col2:
+            if option == "Upload File":
+                uploaded_file = st.file_uploader(
+                    "Upload your resume/CV (PDF, DOCX, TXT)", 
+                    type=["pdf", "docx", "doc", "txt"]
+                )
+                if uploaded_file is not None:
+                    with st.spinner('Extracting text...'):
+                        original_cv = extract_text_from_file(uploaded_file)
+                        if original_cv:
+                            st.success("Text extracted successfully!")
+                        else:
+                            original_cv = ""
+            else:
+                original_cv = st.text_area(
+                    "Paste your current Resume/CV:", 
+                    height=300,
+                    placeholder="Paste your current resume/CV content here..."
+                )
+        
     # Add model selection
     model = st.selectbox(
         "Language Model:",
