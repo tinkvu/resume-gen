@@ -4,3 +4,5 @@ fpdf2
 python-dotenv
 git+https://github.com/py-pdf/fpdf2.git@master
 fpdf
+pdfminer.six
+docx2txt
